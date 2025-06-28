@@ -4,45 +4,82 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Life Progress</title>
-  <link rel="stylesheet" href="style.css" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
-  <header>
-    <h1>Life Progress</h1>
-    <nav>
-      <a href="#">Home</a>
-      <a href="#">Goals</a>
-      <a href="#">Milestones</a>
-      <a href="#">Journal</a>
+  <!-- NAVBAR -->
+  <header class="navbar">
+    <div class="logo" id="menu-toggle">☰</div>
+    <nav class="nav-links" id="nav-links">
+      <a href="about/about.html">About Me</a>
+      <a href="habit-tracker/habit-tracker.html">Habits</a>
+      <a href="goals-page/goals-page.html">Goals</a>
+      <a href="milestones/milestones.html">Milestones</a>
+      <a href="mood-tracker/mood-tracker.html">Mood</a>
+      <a href="blog/blog.html">Blog</a>
     </nav>
   </header>
 
-  <section class="hero">
-    <div class="hero-text">
-      <h2>Track Your Growth. Reflect with Intention.</h2>
-      <p>Your personal space to record, reflect, and redesign your life journey.</p>
-      <a href="#" class="cta-button">Get Started</a>
+  <!-- MAIN CONTENT -->
+  <main class="main-container">
+    <!-- LEFT PANEL -->
+    <aside class="left-panel">
+      <div class="quote-box">
+        <p>"Your quote goes here. Inspire. Reflect. Grow."</p>
+      </div>
+      <div class="social-links">
+        <a href="#">Facebook</a>
+        <a href="#">Instagram</a>
+        <a href="#">Twitter</a>
+        <a href="#">YouTube</a>
+        <a href="#">LinkedIn</a>
+        <a href="#">Discord</a>
+      </div>
+    </aside>
+
+    <!-- PROFILE SECTION -->
+    <section class="profile-section">
+      <div class="profile-pic"><div><img src="Images/justine.jpg" alt=""></div></div>
+      <div class="bio-block">
+        <p>This is a short bio of the person. Describe yourself here — your values, story, or motto.</p>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL -->
+    <aside class="right-panel">
+      <div class="intro-box">
+        <h2>Welcome to Life Progress</h2>
+        <p>This site helps you track your goals, milestones, and reflections as you grow.</p>
+      </div>
+      <div class="why-block">
+        <p>This site exists to guide personal development and inspire intentional living.</p>
+      </div>
+    </aside>
+  </main>
+
+  <!-- FEATURE CARDS -->
+  <section class="features-section">
+    <div class="feature-card">
+      <h3>🏠 Home</h3>
+      <p>Your landing zone — overview, bio, and inspiration.</p>
+    </div>
+    <div class="feature-card">
+      <h3>🎯 Goals</h3>
+      <p>Set your intentions and track what matters.</p>
+    </div>
+    <div class="feature-card">
+      <h3>🚩 Milestones</h3>
+      <p>Mark your progress with achievements and wins.</p>
+    </div>
+    <div class="feature-card">
+      <h3>📖 My Story</h3>
+      <p>Reflect on who you are and how far you've come.</p>
     </div>
   </section>
 
-  <section class="features">
-    <div class="feature-card">
-      <h3>🎯 Goal Tracking</h3>
-      <p>Set and visualize progress on your short- and long-term goals.</p>
-    </div>
-    <div class="feature-card">
-      <h3>📅 Milestones</h3>
-      <p>Celebrate the small wins that mark your journey forward.</p>
-    </div>
-    <div class="feature-card">
-      <h3>📝 Daily Journal</h3>
-      <p>Write your thoughts, reflect on your day, and grow through awareness.</p>
-    </div>
-  </section>
-
-  <footer>
-    <p>&copy; 2025 Life Progress. All rights reserved.</p>
+  <!-- FOOTER -->
+  <footer class="footer">
+    <p>&copy; 2025 Life Progress. Built with vision by Justine.</p>
   </footer>
 </body>
 </html>
