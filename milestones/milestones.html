@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Milestones</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 2rem;
+      background: #f5f5f5;
+    }
+    h1 {
+      text-align: center;
+    }
+    #addMilestoneBtn {
+      display: block;
+      margin: 1rem auto;
+      padding: 10px 20px;
+      background: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    .milestone {
+      background: white;
+      border: 1px solid #ccc;
+      padding: 1rem;
+      margin: 1rem 0;
+      position: relative;
+    }
+    .milestone h2,
+    .milestone p,
+    .milestone .caption {
+      margin: 0.5rem 0;
+    }
+    .gallery img {
+      max-width: 100px;
+      margin: 5px;
+      border-radius: 5px;
+    }
+    .actions {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+    }
+    .actions button {
+      margin-left: 5px;
+    }
+    .milestone input,
+    .milestone textarea {
+      width: 100%;
+      margin: 5px 0;
+    }
+    #backBtn {
+    display: inline-block;
+    margin-bottom: 1rem;
+    text-decoration: none;
+    color: #007bff;
+    font-weight: bold;
+    font-size: 1rem;
+    }
+    #backBtn:hover {
+    text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+<a href="../index.html" id="backBtn">← Back to Home</a>
+
+<h1>My Milestones</h1>
+<button id="addMilestoneBtn">Add Milestone</button>
+<div id="milestoneContainer"></div>
+
+<script>
+  const container = document.getElementById('milestoneContainer');
+  const addBtn = document.getElementById('addMilestoneBtn');
+
+  let milestones = JSON.parse(localStorage.getItem('milestones')) || [];
+
+  function render() {
+    container.innerHTML = '';
+    milestones.forEach((m, index) => {
+      const card = document.createElement('div');
+      card.className = 'milestone';
+
+      const title = document.createElement('h2');
+      title.textContent = m.title || 'Untitled';
+
+      const caption = document.createElement('div');
+      caption.className = 'caption';
+      caption.textContent = m.caption || '';
+
+      const desc = document.createElement('p');
+      desc.textContent = m.description || '';
+
+      const gallery = document.createElement('div');
+      gallery.className = 'gallery';
+      m.images.forEach(img => {
+        const image = document.createElement('img');
+        image.src = img;
+        gallery.appendChild(image);
+      });
+
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+
+      const editBtn = document.createElement('button');
+      editBtn.textContent = '✏️';
+      editBtn.onclick = () => editMilestone(index);
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.textContent = '🗑️';
+      deleteBtn.onclick = () => {
+        if (confirm('Delete this milestone?')) {
+          milestones.splice(index, 1);
+          save();
+          render();
+        }
+      };
+
+      actions.appendChild(editBtn);
+      actions.appendChild(deleteBtn);
+
+      card.appendChild(actions);
+      card.appendChild(title);
+      card.appendChild(caption);
+      card.appendChild(desc);
+      card.appendChild(gallery);
+
+      container.appendChild(card);
+    });
+  }
+
+  function save() {
+    localStorage.setItem('milestones', JSON.stringify(milestones));
+  }
+
+function editMilestone(index) {
+  const m = milestones[index];
+
+  const form = document.createElement('div');
+  form.className = 'milestone';
+
+  const titleInput = document.createElement('input');
+  titleInput.value = m.title || '';
+  titleInput.placeholder = 'Title';
+
+  const captionInput = document.createElement('input');
+  captionInput.value = m.caption || '';
+  captionInput.placeholder = 'Caption';
+
+  const descInput = document.createElement('textarea');
+  descInput.value = m.description || '';
+  descInput.placeholder = 'Description...';
+
+  const imgInput = document.createElement('input');
+  imgInput.type = 'file';
+  imgInput.multiple = true;
+  imgInput.accept = 'image/*';
+
+  const preview = document.createElement('div');
+  preview.className = 'gallery';
+
+  // Helper: render preview with remove buttons
+  function updatePreview() {
+    preview.innerHTML = '';
+    m.images.forEach((src, imgIndex) => {
+      const wrapper = document.createElement('div');
+      wrapper.style.position = 'relative';
+      wrapper.style.display = 'inline-block';
+
+      const img = document.createElement('img');
+      img.src = src;
+
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = '❌';
+      removeBtn.style.position = 'absolute';
+      removeBtn.style.top = '0';
+      removeBtn.style.right = '0';
+      removeBtn.style.background = 'rgba(0,0,0,0.6)';
+      removeBtn.style.color = 'white';
+      removeBtn.style.border = 'none';
+      removeBtn.style.cursor = 'pointer';
+      removeBtn.style.fontSize = '12px';
+      removeBtn.onclick = () => {
+        m.images.splice(imgIndex, 1);
+        updatePreview();
+      };
+
+      wrapper.appendChild(img);
+      wrapper.appendChild(removeBtn);
+      preview.appendChild(wrapper);
+    });
+  }
+
+  imgInput.addEventListener('change', (e) => {
+  const files = Array.from(e.target.files);
+  files.forEach(file => {
+    if (file.size > 500 * 1024) { // 500KB limit
+      alert("Image too large! Please upload one smaller than 500KB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      m.images.push(reader.result);
+      updatePreview();
+    };
+    reader.readAsDataURL(file);
+  });
+});
+
+
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = '💾 Save';
+  saveBtn.onclick = () => {
+    milestones[index] = {
+      title: titleInput.value,
+      caption: captionInput.value,
+      description: descInput.value,
+      images: m.images
+    };
+    save();
+    render();
+  };
+
+  form.appendChild(titleInput);
+  form.appendChild(captionInput);
+  form.appendChild(descInput);
+  form.appendChild(imgInput);
+  form.appendChild(preview);
+  form.appendChild(saveBtn);
+
+  container.innerHTML = '';
+  container.appendChild(form);
+
+  updatePreview(); // initial preview
+}
+
+
+  function addMilestone() {
+    milestones.push({ title: '', caption: '', description: '', images: [] });
+    save();
+    render();
+    editMilestone(milestones.length - 1);
+  }
+
+  addBtn.addEventListener('click', addMilestone);
+
+  render();
+</script>
+
+</body>
+</html>

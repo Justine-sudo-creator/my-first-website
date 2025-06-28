@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Habit Tracker</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    h1 {
+      text-align: center;
+    }
+    #habitForm {
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    #habitList {
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+    }
+    .month {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow-x: auto;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 4px;
+      text-align: center;
+      font-size: 12px;
+    }
+    th {
+      background: #f0f0f0;
+    }
+    input[type="text"] {
+      padding: 6px;
+      font-size: 16px;
+      width: 200px;
+    }
+    button {
+      padding: 6px 12px;
+      font-size: 14px;
+      margin-left: 5px;
+    }
+  </style>
+</head>
+<body>
+  <a href="../index.html" style="
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  text-decoration: none;
+  font-size: 16px;
+  color: #333;
+  background: #eee;
+  padding: 6px 12px;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+">
+  ← Go Back to Home</a>
+
+  <h1>Habit Tracker</h1>
+
+  <div id="habitForm">
+    <input type="text" id="habitInput" placeholder="New habit name">
+    <button onclick="addHabit()">Add Habit</button>
+  </div>
+
+  <div id="habitList"></div>
+
+  <script>
+    const habitInput = document.getElementById('habitInput');
+    const habitList = document.getElementById('habitList');
+    const STORAGE_KEY = 'habit-tracker-data';
+    const currentYear = new Date().getFullYear();
+
+    let habits = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+
+    function daysInMonth(year, month) {
+      return new Date(year, month + 1, 0).getDate();
+    }
+
+    function saveHabits() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(habits));
+    }
+
+    function addHabit() {
+      const name = habitInput.value.trim();
+      if (!name) return;
+      if (habits.some(h => h.name === name)) return alert("Habit already exists!");
+
+      const newHabit = {
+        name,
+        checks: {} // format: "YYYY-MM-DD": true/false
+      };
+      habits.push(newHabit);
+      habitInput.value = '';
+      saveHabits();
+      render();
+    }
+
+    function toggleCheck(habitIndex, date) {
+      const habit = habits[habitIndex];
+      habit.checks[date] = !habit.checks[date];
+      saveHabits();
+      render();
+    }
+
+    function editHabit(index) {
+      const newName = prompt("Edit habit name:", habits[index].name);
+      if (newName && newName.trim()) {
+        habits[index].name = newName.trim();
+        saveHabits();
+        render();
+       }
+      }
+
+    function deleteHabit(index) {
+      if (confirm(`Delete habit "${habits[index].name}"?`)) {
+        habits.splice(index, 1);
+        saveHabits();
+        render();
+      }
+    }
+
+    function render() {
+      habitList.innerHTML = '';
+
+      for (let month = 0; month < 12; month++) {
+        const monthDiv = document.createElement('div');
+        monthDiv.className = 'month';
+
+        const monthName = new Date(currentYear, month).toLocaleString('default', { month: 'long' });
+        monthDiv.innerHTML = `<h2>${monthName}</h2>`;
+
+        const table = document.createElement('table');
+        const headerRow = document.createElement('tr');
+        headerRow.innerHTML = `<th>Habit</th>`;
+        const days = daysInMonth(currentYear, month);
+
+        for (let day = 1; day <= days; day++) {
+          const date = new Date(currentYear, month, day);
+          const weekday = date.toLocaleDateString(undefined, { weekday: 'short' });
+          const paddedDay = String(day).padStart(2, '0');
+          headerRow.innerHTML += `<th>${weekday}<br>${paddedDay}</th>`;
+        }
+        table.appendChild(headerRow);
+
+        habits.forEach((habit, hIndex) => {
+          const row = document.createElement('tr');
+          const nameCell = document.createElement('td');
+          nameCell.innerHTML = `
+            <strong>${habit.name}</strong><br>
+            <button onclick="editHabit(${hIndex})">✏️</button>
+            <button onclick="deleteHabit(${hIndex})">🗑️</button>
+          `;
+          row.appendChild(nameCell);
+
+          for (let day = 1; day <= days; day++) {
+            const dateStr = `${currentYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const cell = document.createElement('td');
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = !!habit.checks[dateStr];
+            checkbox.onchange = () => toggleCheck(hIndex, dateStr);
+            cell.appendChild(checkbox);
+            row.appendChild(cell);
+          }
+
+          table.appendChild(row);
+        });
+
+        monthDiv.appendChild(table);
+        habitList.appendChild(monthDiv);
+      }
+    }
+
+    render();
+  </script>
+</body>
+</html>

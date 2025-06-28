@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Justine’s Blog Universe</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      background: #fdfdfd;
+      color: #222;
+      padding: 2rem;
+    }
+    h1, h2, h3 {
+      margin-bottom: 0.5rem;
+    }
+    nav {
+      margin-bottom: 1rem;
+    }
+    nav button {
+      margin: 0.25rem;
+      padding: 0.5rem 1rem;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .episode-card, .character-card, .arc-card {
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      background: white;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    .mood-chaotic { border-left: 4px solid red; }
+    .mood-hopeful { border-left: 4px solid green; }
+    .mood-melancholic { border-left: 4px solid blue; }
+    .mood-anxious { border-left: 4px solid orange; }
+    .mood-motivated { border-left: 4px solid limegreen; }
+    .mood-exhausted { border-left: 4px solid gray; }
+    .mood-content { border-left: 4px solid teal; }
+    .mood-numb { border-left: 4px solid #999; }
+    .mood-grateful { border-left: 4px solid gold; }
+    .mood-angry { border-left: 4px solid darkred; }
+    .mood-nostalgic { border-left: 4px solid #9966cc; }
+
+    a {
+      display: inline-block;
+      margin-bottom: 1rem;
+      text-decoration: none;
+      color: #007bff;
+      font-weight: bold;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+<a href="../index.html">← Back to Home</a>
+<h1>📖 Justine’s Blog Universe</h1>
+
+<nav>
+  <button onclick="showSection('episodes')">Episodes</button>
+  <button onclick="showSection('arcs')">Arcs</button>
+  <button onclick="showSection('characters')">Characters</button>
+</nav>
+
+<div id="content"></div>
+
+<script>
+  const defaultEpisodes = [
+    {
+      title: "Pilot: The Broken Terminal",
+      date: "2024-03-12",
+      mood: "chaotic",
+      arc: "Arc: Cataclysm",
+      excerpt: "I got kicked out of leadership. I pretended I didn’t care.",
+      content: `Everything crashed the day I stopped pretending. The library, the whispers, the consequence. That was the day Justine died, and the Glitchwalker was born.`
+    },
+    {
+      title: "Episode 2: Echoes from the Quiet",
+      date: "2024-03-14",
+      mood: "melancholic",
+      arc: "Arc: Cataclysm",
+      excerpt: "Home was still noisy, but I started hearing myself.",
+      content: `Under the rusted roof and shared bedspace, I wrote lines of code I didn't understand, searching for structure in the noise.`
+    },
+    {
+      title: "Episode 3: printf(“Alive”);",
+      date: "2024-04-05",
+      mood: "hopeful",
+      arc: "The Debugging Saga",
+      excerpt: "I printed something to the console. And for once, it felt true.",
+      content: `Bugs still swarm me, but now I know they're part of the process. Every error is a message, every crash a checkpoint.`
+    }
+  ];
+
+  let episodes = [...defaultEpisodes];
+  let arcs = [
+    { title: "Arc: Cataclysm", description: "The spiral, the fall, the break. And what came after." },
+    { title: "The Debugging Saga", description: "Moments of clarity after hours of chaos." }
+  ];
+  let characters = [
+    { name: "Justine (The Glitchwalker)", description: "A soul navigating logic and chaos, guilt and growth." },
+    { name: "Procrastination", description: "An insidious entity that shapeshifts into YouTube, naps, and meaningless tabs." }
+  ];
+
+  const saved = localStorage.getItem("episodes");
+  if (saved) {
+    const savedEpisodes = JSON.parse(saved);
+    if (Array.isArray(savedEpisodes)) episodes.push(...savedEpisodes);
+  }
+
+  const content = document.getElementById('content');
+
+  function showSection(section) {
+    content.innerHTML = '';
+
+    if (section === 'episodes') {
+      episodes.forEach((ep, index) => {
+        const card = document.createElement('div');
+        card.className = `episode-card mood-${ep.mood}`;
+        card.innerHTML = `
+          <h2>${ep.title}</h2>
+          <small><i>${ep.date} • Mood: ${ep.mood}</i></small>
+          <p><strong>${ep.excerpt}</strong></p>
+          <details><summary>Read more</summary><p>${ep.content}</p></details>
+          <button onclick="editEpisode(${index})">Edit</button>
+          <button onclick="deleteEpisode(${index})">Delete</button>
+        `;
+        content.appendChild(card);
+      });
+
+      // Add new episode form
+      const form = document.createElement('div');
+      form.className = 'episode-card';
+      form.innerHTML = `
+        <h2>New Episode</h2>
+        <label>Title: <input type="text" id="title"></label><br>
+        <label>Date: <input type="date" id="date" value="${new Date().toISOString().split("T")[0]}"></label><br>
+        <label>Mood: 
+          <select id="mood">
+            <option>chaotic</option>
+            <option>hopeful</option>
+            <option>melancholic</option>
+            <option>anxious</option>
+            <option>motivated</option>
+            <option>exhausted</option>
+            <option>content</option>
+            <option>numb</option>
+            <option>grateful</option>
+            <option>angry</option>
+            <option>nostalgic</option>
+          </select>
+        </label><br>
+        <label>Arc:
+        <select id="arc">
+            ${arcs.map(arc => `<option>${arc.title}</option>`).join('')}
+        </select>
+        </label><br>
+        <label>Excerpt: <input type="text" id="excerpt"></label><br>
+        <label>Content:<br><textarea id="contentText"></textarea></label><br>
+        <button onclick="submitNewEpisode()">Add</button>
+      `;
+      content.appendChild(form);
+    }
+
+    if (section === 'arcs') {
+      arcs.forEach((arc, index) => {
+        const card = document.createElement('div');
+        card.className = 'arc-card';
+        card.innerHTML = `
+          <h2>${arc.title}</h2>
+          <p>${arc.description}</p>
+          <button onclick="editArc(${index})">Edit</button>
+          <button onclick="deleteArc(${index})">Delete</button>
+        `;
+
+        const epList = document.createElement('ul');
+        const related = episodes.filter(ep => ep.arc === arc.title);
+        if (related.length === 0) {
+          epList.innerHTML = "<li><em>No episodes yet in this arc.</em></li>";
+        } else {
+          related.forEach(ep => {
+            const li = document.createElement('li');
+            li.innerHTML = `<strong>${ep.title}</strong> – ${ep.excerpt}`;
+            epList.appendChild(li);
+          });
+        }
+
+        card.appendChild(epList);
+        content.appendChild(card);
+      });
+
+      const addBtn = document.createElement('button');
+      addBtn.textContent = "Add New Arc";
+      addBtn.onclick = addArc;
+      content.appendChild(addBtn);
+    }
+
+    if (section === 'characters') {
+      characters.forEach((char, index) => {
+        const card = document.createElement('div');
+        card.className = 'character-card';
+        card.innerHTML = `
+          <h2>${char.name}</h2>
+          <p>${char.description}</p>
+          <button onclick="editCharacter(${index})">Edit</button>
+          <button onclick="deleteCharacter(${index})">Delete</button>
+        `;
+        content.appendChild(card);
+      });
+
+      const addBtn = document.createElement('button');
+      addBtn.textContent = "Add New Character";
+      addBtn.onclick = addCharacter;
+      content.appendChild(addBtn);
+    }
+  }
+
+  function editEpisode(index) {
+    const ep = episodes[index];
+    const card = document.createElement('div');
+    card.className = `episode-card mood-${ep.mood}`;
+    card.innerHTML = `
+      <label>Title: <input type="text" id="title" value="${ep.title}"></label><br>
+      <label>Date: <input type="date" id="date" value="${ep.date}"></label><br>
+      <label>Mood: 
+        <select id="mood">
+          <option ${ep.mood === 'chaotic' ? 'selected' : ''}>chaotic</option>
+          <option ${ep.mood === 'hopeful' ? 'selected' : ''}>hopeful</option>
+          <option ${ep.mood === 'melancholic' ? 'selected' : ''}>melancholic</option>
+          <option ${ep.mood === 'anxious' ? 'selected' : ''}>anxious</option>
+        <option ${ep.mood === 'motivated' ? 'selected' : ''}>motivated</option>
+        <option ${ep.mood === 'exhausted' ? 'selected' : ''}>exhausted</option>
+        <option ${ep.mood === 'content' ? 'selected' : ''}>content</option>
+        <option ${ep.mood === 'numb' ? 'selected' : ''}>numb</option>
+        <option ${ep.mood === 'grateful' ? 'selected' : ''}>grateful</option>
+        <option ${ep.mood === 'angry' ? 'selected' : ''}>angry</option>
+        <option ${ep.mood === 'nostalgic' ? 'selected' : ''}>nostalgic</option>
+        </select>
+      </label><br>
+      <label>Arc:
+        <select id="arc">
+            ${arcs.map(arc => `
+            <option ${ep.arc === arc.title ? 'selected' : ''}>${arc.title}</option>
+            `).join('')}
+        </select>
+    </label><br>
+      <label>Excerpt: <input type="text" id="excerpt" value="${ep.excerpt}"></label><br>
+      <label>Content:<br><textarea id="contentText">${ep.content}</textarea></label><br>
+      <button onclick="saveEpisode(${index})">Save</button>
+      <button onclick="showSection('episodes')">Cancel</button>
+    `;
+    content.innerHTML = '';
+    content.appendChild(card);
+  }
+
+  function saveEpisode(index) {
+    const updated = {
+      title: document.getElementById("title").value,
+      date: document.getElementById("date").value,
+      mood: document.getElementById("mood").value,
+      arc: document.getElementById("arc").value,
+      excerpt: document.getElementById("excerpt").value,
+      content: document.getElementById("contentText").value,
+    };
+    episodes[index] = updated;
+    localStorage.setItem("episodes", JSON.stringify(episodes.slice(defaultEpisodes.length)));
+    showSection('episodes');
+  }
+
+  function submitNewEpisode() {
+    const newEp = {
+      title: document.getElementById("title").value,
+      date: document.getElementById("date").value,
+      mood: document.getElementById("mood").value,
+      arc: document.getElementById("arc").value,
+      excerpt: document.getElementById("excerpt").value,
+      content: document.getElementById("contentText").value,
+    };
+    episodes.push(newEp);
+    localStorage.setItem("episodes", JSON.stringify(episodes.slice(defaultEpisodes.length)));
+    showSection('episodes');
+  }
+
+  function deleteEpisode(index) {
+    if (!confirm("Delete this episode?")) return;
+    episodes.splice(index, 1);
+    localStorage.setItem("episodes", JSON.stringify(episodes.slice(defaultEpisodes.length)));
+    showSection('episodes');
+  }
+
+  function addArc() {
+    const title = prompt("Arc title?");
+    const description = prompt("Description?");
+    if (!title || !description) return;
+    arcs.push({ title, description });
+    showSection('arcs');
+  }
+
+  function editArc(index) {
+    const arc = arcs[index];
+    const title = prompt("Edit arc title:", arc.title);
+    const description = prompt("Edit description:", arc.description);
+    arcs[index] = { title, description };
+    showSection('arcs');
+  }
+
+  function deleteArc(index) {
+    if (!confirm("Delete this arc?")) return;
+    arcs.splice(index, 1);
+    showSection('arcs');
+  }
+
+  function addCharacter() {
+    const name = prompt("Character name:");
+    const description = prompt("Description:");
+    if (!name || !description) return;
+    characters.push({ name, description });
+    showSection('characters');
+  }
+
+  function editCharacter(index) {
+    const char = characters[index];
+    const name = prompt("Edit name", char.name);
+    const description = prompt("Edit description", char.description);
+    characters[index] = { name, description };
+    showSection('characters');
+  }
+
+  function deleteCharacter(index) {
+    if (!confirm("Delete this character?")) return;
+    characters.splice(index, 1);
+    showSection('characters');
+  }
+
+  showSection('episodes');
+  console.log("%c👀 You’re peeking into the source. Welcome, Debugger.", "color: magenta; font-size: 16px");
+</script>
+
+
+
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mood Tracker</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #f9f9f9;
+      padding: 20px;
+      margin: 0;
+    }
+    h1 {
+      text-align: center;
+    }
+    .mood-form, .calendar, .legend {
+      background: white;
+      margin: 20px auto;
+      padding: 15px;
+      border-radius: 8px;
+      max-width: 800px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    .mood-form input, .mood-form button {
+      padding: 8px;
+      margin: 5px;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #f0f0f0;
+      padding: 5px 10px;
+      border-radius: 4px;
+    }
+    .legend-color {
+      width: 15px;
+      height: 15px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .calendar-month {
+      margin-bottom: 20px;
+    }
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+    .calendar-day {
+      height: 30px;
+      text-align: center;
+      line-height: 30px;
+      background: #eee;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .calendar-day.empty {
+      background: transparent;
+      cursor: default;
+    }
+    .weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      text-align: center;
+      font-weight: bold;
+      font-size: 13px;
+      margin-bottom: 5px;
+    }
+    select {
+      padding: 4px;
+    }
+  </style>
+</head>
+<body>
+    <a href="../index.html" style="position: absolute; top: 20px; left: 20px; text-decoration: none; font-size: 14px; background: #ddd; padding: 6px 10px; border-radius: 5px; color: black;">← Back to Home</a>
+  <h1>🧠 Mood Tracker</h1>
+
+  <div class="mood-form">
+    <input type="text" id="moodName" placeholder="Mood name">
+    <input type="color" id="moodColor" value="#ffcc00">
+    <button onclick="addMood()">Add Mood</button>
+    <select id="moodSelect">
+      <option value="">-- Select Mood --</option>
+      <option value="__clear__">❌ Clear Mood</option>
+    </select>
+    <button onclick="editMood()">Edit</button>
+    <button onclick="deleteMood()">Delete</button>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="calendar" id="calendar"></div>
+
+  <script>
+    const currentYear = new Date().getFullYear();
+    const moodData = JSON.parse(localStorage.getItem("moodData")) || {};
+    const moods = JSON.parse(localStorage.getItem("moods")) || {};
+
+    const calendarDiv = document.getElementById("calendar");
+    const legendDiv = document.getElementById("legend");
+    const moodSelect = document.getElementById("moodSelect");
+
+    function saveData() {
+      localStorage.setItem("moodData", JSON.stringify(moodData));
+      localStorage.setItem("moods", JSON.stringify(moods));
+    }
+
+    function addMood() {
+      const name = document.getElementById("moodName").value.trim();
+      const color = document.getElementById("moodColor").value;
+      if (!name) return;
+      moods[name] = color;
+      updateUI();
+    }
+
+    function editMood() {
+      const selected = moodSelect.value;
+      if (!selected || selected === "__clear__") return;
+      const newName = prompt("New name for mood:", selected);
+      if (!newName) return;
+      const newColor = prompt("New hex color (e.g. #ffcc00):", moods[selected]);
+      if (!newColor || !/^#[0-9A-Fa-f]{6}$/.test(newColor)) return alert("Invalid color.");
+      moods[newName] = newColor;
+      if (newName !== selected) delete moods[selected];
+      updateUI();
+    }
+
+    function deleteMood() {
+      const selected = moodSelect.value;
+      if (!selected || selected === "__clear__") return;
+      delete moods[selected];
+      updateUI();
+    }
+
+    function updateUI() {
+      // Update mood select
+      moodSelect.innerHTML = `
+        <option value="">-- Select Mood --</option>
+        <option value="__clear__">❌ Clear Mood</option>`;
+      Object.keys(moods).forEach(name => {
+        const option = document.createElement("option");
+        option.value = name;
+        option.textContent = name;
+        moodSelect.appendChild(option);
+      });
+
+      // Update legend
+      legendDiv.innerHTML = '';
+      Object.entries(moods).forEach(([name, color]) => {
+        const item = document.createElement("div");
+        item.className = "legend-item";
+        item.innerHTML = `<span class="legend-color" style="background:${color}"></span> ${name}`;
+        legendDiv.appendChild(item);
+      });
+
+      // Redraw calendar
+      drawCalendar();
+      saveData();
+    }
+
+    function drawCalendar() {
+      calendarDiv.innerHTML = '';
+      for (let month = 0; month < 12; month++) {
+        const daysInMonth = new Date(currentYear, month + 1, 0).getDate();
+        const startDay = new Date(currentYear, month, 1).getDay();
+
+        const monthDiv = document.createElement("div");
+        monthDiv.className = "calendar-month";
+        const title = document.createElement("h3");
+        title.textContent = new Date(currentYear, month).toLocaleString('default', { month: 'long' });
+        monthDiv.appendChild(title);
+
+        const weekdays = document.createElement("div");
+        weekdays.className = "weekdays";
+        ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].forEach(day => {
+          const dayDiv = document.createElement("div");
+          dayDiv.textContent = day;
+          weekdays.appendChild(dayDiv);
+        });
+        monthDiv.appendChild(weekdays);
+
+        const grid = document.createElement("div");
+        grid.className = "calendar-grid";
+
+        for (let i = 0; i < startDay; i++) {
+          const empty = document.createElement("div");
+          empty.className = "calendar-day empty";
+          grid.appendChild(empty);
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+          const cell = document.createElement("div");
+          const dateKey = `${currentYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          const mood = moodData[dateKey];
+          cell.className = "calendar-day";
+          cell.textContent = day;
+          if (mood && moods[mood]) {
+            cell.style.background = moods[mood];
+          }
+
+          cell.onclick = () => {
+            const selectedMood = moodSelect.value;
+            if (!selectedMood) return alert("Please select a mood.");
+            if (selectedMood === "__clear__") {
+              delete moodData[dateKey];
+            } else {
+              moodData[dateKey] = selectedMood;
+            }
+            updateUI();
+          };
+          grid.appendChild(cell);
+        }
+
+        monthDiv.appendChild(grid);
+        calendarDiv.appendChild(monthDiv);
+      }
+    }
+
+    updateUI();
+  </script>
+</body>
+</html>
