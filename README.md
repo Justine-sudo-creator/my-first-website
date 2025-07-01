@@ -13,3 +13,4 @@
 ## Next Steps
 - Add authentication system
 - Improve UI with CSS frameworks
+- ![qr](https://github.com/user-attachments/assets/b18806bf-a80e-4b43-b9fb-ae18d587b58c)
