@@ -6,76 +6,86 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Gavel, Search, TrendingUp, Clock, Users, ArrowLeft } from "lucide-react"
+import { Gavel, Search, TrendingUp, Clock, Users, ArrowLeft, Loader2 } from "lucide-react"
 import Link from "next/link"
 
 export default function CasesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [sortBy, setSortBy] = useState("trending")
   const [filterBy, setFilterBy] = useState("all")
-
-  // Mock cases data
   const [cases, setCases] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
+  const [offset, setOffset] = useState(0)
+
+  const CASES_PER_PAGE = 12
+
+  const fetchCases = async (isLoadMore = false) => {
+    try {
+      const currentOffset = isLoadMore ? offset : 0
+      const params = new URLSearchParams({
+        limit: CASES_PER_PAGE.toString(),
+        offset: currentOffset.toString(),
+        sortBy: sortBy,
+        ...(searchTerm && { search: searchTerm }),
+      })
+
+      const response = await fetch(`/api/cases?${params}`)
+      if (!response.ok) {
+        const text = await response.text()
+        throw new Error(text || "Failed to fetch")
+      }
+      const data = await response.json()
+
+      if (isLoadMore) {
+        setCases((prev) => [...prev, ...(data.cases || [])])
+      } else {
+        setCases(data.cases || [])
+      }
+
+      // Check if there are more cases to load
+      setHasMore((data.cases || []).length === CASES_PER_PAGE)
+
+      if (isLoadMore) {
+        setOffset(currentOffset + CASES_PER_PAGE)
+      } else {
+        setOffset(CASES_PER_PAGE)
+      }
+    } catch (error) {
+      console.error("Failed to fetch cases:", error)
+    } finally {
+      setLoading(false)
+      setLoadingMore(false)
+    }
+  }
 
   useEffect(() => {
-    async function fetchCases() {
-      try {
-        const params = new URLSearchParams({
-          limit: "20",
-          sortBy: sortBy,
-          ...(searchTerm && { search: searchTerm }),
-        })
-
-        const response = await fetch(`/api/cases?${params}`)
-        if (!response.ok) {
-          const text = await response.text()
-          throw new Error(text || "Failed to fetch")
-        }
-        const data = await response.json()
-        setCases(data.cases || [])
-      } catch (error) {
-        console.error("Failed to fetch cases:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchCases()
+    setLoading(true)
+    setOffset(0)
+    fetchCases(false)
   }, [sortBy, searchTerm])
 
-  const filteredCases = cases.filter((case_) => {
-    const matchesSearch =
-      case_.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      case_.description.toLowerCase().includes(searchTerm.toLowerCase())
+  const handleLoadMore = () => {
+    setLoadingMore(true)
+    fetchCases(true)
+  }
 
+  const filteredCases = cases.filter((case_) => {
     const matchesFilter =
       filterBy === "all" ||
       (filterBy === "verdict-ready" && case_.status === "Verdict Ready") ||
       (filterBy === "voting" && case_.status === "Jury Voting") ||
       (filterBy === "tone" && case_.tone.toLowerCase() === filterBy)
 
-    return matchesSearch && matchesFilter
-  })
-
-  const sortedCases = [...filteredCases].sort((a, b) => {
-    const totalVotesA = a.votes.plaintiff + a.votes.defendant + a.votes.split
-    const totalVotesB = b.votes.plaintiff + b.votes.defendant + b.votes.split
-
-    switch (sortBy) {
-      case "trending":
-        return totalVotesB - totalVotesA
-      case "recent":
-        return new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()
-      case "comments":
-        return b.comments - a.comments
-      default:
-        return 0
-    }
+    return matchesFilter
   })
 
   const getTotalVotes = (votes: any) => votes.plaintiff + votes.defendant + votes.split
-  const getPlaintiffPercentage = (votes: any) => Math.round((votes.plaintiff / getTotalVotes(votes)) * 100)
+  const getPlaintiffPercentage = (votes: any) => {
+    const total = getTotalVotes(votes)
+    return total > 0 ? Math.round((votes.plaintiff / total) * 100) : 0
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -202,62 +212,93 @@ export default function CasesPage() {
           </Card>
         </div>
 
-        {/* Cases Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {sortedCases.map((case_) => (
-            <Card key={case_.id} className="hover:shadow-lg transition-shadow cursor-pointer group">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <CardTitle className="text-lg line-clamp-2 group-hover:text-blue-600 transition-colors">
-                    {case_.title}
-                  </CardTitle>
-                  <Badge variant={case_.status === "Verdict Ready" ? "default" : "secondary"}>{case_.status}</Badge>
-                </div>
-                <CardDescription className="line-clamp-3">{case_.description}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Tone:</span>
-                    <Badge variant="outline">{case_.tone}</Badge>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Plaintiff Leading</span>
-                      <span className="font-medium">{getPlaintiffPercentage(case_.votes)}%</span>
+        {/* Loading State */}
+        {loading ? (
+          <div className="text-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+            <p className="text-gray-600">Loading cases...</p>
+          </div>
+        ) : (
+          <>
+            {/* Cases Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredCases.map((case_) => (
+                <Card key={case_.id} className="hover:shadow-lg transition-shadow cursor-pointer group">
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <CardTitle className="text-lg line-clamp-2 group-hover:text-blue-600 transition-colors">
+                        {case_.title}
+                      </CardTitle>
+                      <Badge variant={case_.status === "Verdict Ready" ? "default" : "secondary"}>{case_.status}</Badge>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-green-500 h-2 rounded-full transition-all"
-                        style={{ width: `${getPlaintiffPercentage(case_.votes)}%` }}
-                      ></div>
+                    <CardDescription className="line-clamp-3">{case_.description}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-500">Tone:</span>
+                        <Badge variant="outline">{case_.tone}</Badge>
+                      </div>
+
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span>Plaintiff Leading</span>
+                          <span className="font-medium">{getPlaintiffPercentage(case_.votes)}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-green-500 h-2 rounded-full transition-all"
+                            style={{ width: `${getPlaintiffPercentage(case_.votes)}%` }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm text-gray-500">
+                        <span>{getTotalVotes(case_.votes).toLocaleString()} votes</span>
+                        <span>{case_.comments} comments</span>
+                        <span>{case_.submittedAt}</span>
+                      </div>
+
+                      <Button variant="outline" className="w-full bg-transparent" asChild>
+                        <Link href={`/case/${case_.id}`}>
+                          {case_.status === "Verdict Ready" ? "Read Verdict" : "Cast Your Vote"}
+                        </Link>
+                      </Button>
                     </div>
-                  </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
 
-                  <div className="flex items-center justify-between text-sm text-gray-500">
-                    <span>{getTotalVotes(case_.votes).toLocaleString()} votes</span>
-                    <span>{case_.comments} comments</span>
-                    <span>{case_.submittedAt}</span>
-                  </div>
+            {/* Load More */}
+            {hasMore && filteredCases.length > 0 && (
+              <div className="text-center mt-12">
+                <Button variant="outline" size="lg" onClick={handleLoadMore} disabled={loadingMore}>
+                  {loadingMore ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Loading More Cases...
+                    </>
+                  ) : (
+                    "Load More Cases"
+                  )}
+                </Button>
+              </div>
+            )}
 
-                  <Button variant="outline" className="w-full bg-transparent" asChild>
-                    <Link href={`/case/${case_.id}`}>
-                      {case_.status === "Verdict Ready" ? "Read Verdict" : "Cast Your Vote"}
-                    </Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Load More */}
-        <div className="text-center mt-12">
-          <Button variant="outline" size="lg">
-            Load More Cases
-          </Button>
-        </div>
+            {/* No Results */}
+            {filteredCases.length === 0 && !loading && (
+              <div className="text-center py-12">
+                <Gavel className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No cases found</h3>
+                <p className="text-gray-600 mb-4">Try adjusting your search or filters</p>
+                <Button asChild>
+                  <Link href="/submit">Submit the First Case</Link>
+                </Button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   )

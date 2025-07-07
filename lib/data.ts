@@ -118,7 +118,7 @@ const comments: Comment[] = [
 
 let nextCaseId = 4
 let nextVoteId = 1
-const nextCommentId = 3
+let nextCommentId = 3
 
 // Helper functions
 export function getAllCases(): Case[] {
@@ -176,6 +176,31 @@ export function addVote(caseId: number, voteType: "plaintiff" | "defendant" | "s
   return true
 }
 
+export function addComment(
+  caseId: number,
+  content: string,
+  voteType: "plaintiff" | "defendant" | "split",
+  ipAddress: string,
+): Comment | null {
+  // Check if case exists
+  const case_ = cases.find((c) => c.id === caseId)
+  if (!case_) return null
+
+  // Create new comment
+  const comment: Comment = {
+    id: nextCommentId++,
+    case_id: caseId,
+    content: content.trim(),
+    vote_type: voteType,
+    likes: 0,
+    ip_address: ipAddress,
+    created_at: new Date().toISOString(),
+  }
+
+  comments.push(comment)
+  return comment
+}
+
 export function getCommentsForCase(caseId: number): Comment[] {
   return comments
     .filter((c) => c.case_id === caseId)
@@ -195,4 +220,9 @@ export function updateCaseVerdict(caseId: number, verdictText: string): boolean 
 
 export function hasUserVoted(caseId: number, ipAddress: string): boolean {
   return votes.some((v) => v.case_id === caseId && v.ip_address === ipAddress)
+}
+
+export function getUserVoteType(caseId: number, ipAddress: string): "plaintiff" | "defendant" | "split" | null {
+  const vote = votes.find((v) => v.case_id === caseId && v.ip_address === ipAddress)
+  return vote ? vote.vote_type : null
 }

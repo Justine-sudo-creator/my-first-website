@@ -24,6 +24,8 @@ import {
   Globe,
   Shield,
   ExternalLink,
+  Send,
+  RefreshCw,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useSearchParams } from "next/navigation"
@@ -42,7 +44,10 @@ export default function CaseDetailPage() {
   const [caseData, setCaseData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [paymentLoading, setPaymentLoading] = useState(false)
+  const [commentLoading, setCommentLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showPaymentInstructions, setShowPaymentInstructions] = useState(false)
 
   const fetchCase = async () => {
     try {
@@ -60,6 +65,7 @@ export default function CaseDetailPage() {
       setError("Failed to load case")
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -67,40 +73,35 @@ export default function CaseDetailPage() {
     fetchCase()
   }, [caseId])
 
-  // Check if verdict was unlocked via payment
+  // Auto-refresh when payment is successful
   useEffect(() => {
     if (paymentSuccess && paymentSource === "gumroad") {
-      console.log("🎉 Payment successful from Gumroad, generating verdict...")
+      console.log("🎉 Payment successful from Gumroad")
+      setShowPaymentInstructions(true)
 
-      // Generate verdict immediately for better UX
-      setTimeout(async () => {
-        try {
-          const response = await fetch("/api/generate-verdict", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              caseTitle: caseData?.title || "Paid Case",
-              caseDescription: caseData?.description || "Paid case description",
-              tone: caseData?.tone || "satirical",
-              votes: caseData?.votes || { plaintiff: 50, defendant: 30, split: 20 },
-            }),
-          })
+      // Auto-refresh every 3 seconds to check for verdict
+      const interval = setInterval(() => {
+        console.log("🔄 Auto-refreshing to check for verdict...")
+        fetchCase()
+      }, 3000)
 
-          if (response.ok) {
-            const { verdict } = await response.json()
-            // Update the case data locally to show the verdict
-            setCaseData((prev: any) => ({
-              ...prev,
-              verdict_unlocked: true,
-              verdict_text: verdict,
-            }))
-          }
-        } catch (error) {
-          console.error("Failed to generate verdict:", error)
-        }
-      }, 1000)
+      // Stop auto-refresh after 2 minutes
+      setTimeout(() => {
+        clearInterval(interval)
+        console.log("⏰ Stopped auto-refresh after 2 minutes")
+      }, 120000)
+
+      return () => clearInterval(interval)
     }
-  }, [paymentSuccess, paymentSource, caseData])
+  }, [paymentSuccess, paymentSource])
+
+  // Stop auto-refresh when verdict is unlocked
+  useEffect(() => {
+    if (caseData?.verdict_unlocked && showPaymentInstructions) {
+      setShowPaymentInstructions(false)
+      console.log("✅ Verdict unlocked! Stopping auto-refresh.")
+    }
+  }, [caseData?.verdict_unlocked, showPaymentInstructions])
 
   const handleVote = async (vote: "plaintiff" | "defendant" | "split") => {
     if (!hasVoted) {
@@ -124,6 +125,45 @@ export default function CaseDetailPage() {
         alert("Failed to vote")
       }
     }
+  }
+
+  const handlePostComment = async () => {
+    if (!comment.trim() || !userVote || commentLoading) return
+
+    setCommentLoading(true)
+    try {
+      const response = await fetch(`/api/cases/${caseId}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: comment.trim(),
+          voteType: userVote,
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // Add the new comment to the case data
+        setCaseData((prev: any) => ({
+          ...prev,
+          comments: [data.comment, ...prev.comments],
+        }))
+        setComment("") // Clear the comment input
+      } else {
+        const error = await response.json()
+        alert(error.error || "Failed to post comment")
+      }
+    } catch (error) {
+      console.error("Failed to post comment:", error)
+      alert("Failed to post comment")
+    } finally {
+      setCommentLoading(false)
+    }
+  }
+
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await fetchCase()
   }
 
   const handleUnlockVerdict = async () => {
@@ -259,16 +299,27 @@ export default function CaseDetailPage() {
           </Card>
         )}
 
-        {paymentSuccess && paymentSource === "gumroad" && (
+        {/* Payment Success Instructions */}
+        {showPaymentInstructions && (
           <Card className="mb-6 border-blue-200 bg-blue-50">
             <CardContent className="pt-6">
-              <div className="flex items-center gap-2 text-blue-800">
-                <Gavel className="h-5 w-5" />
-                <span className="font-semibold">Payment successful!</span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-blue-800 mb-2">
+                    <Gavel className="h-5 w-5" />
+                    <span className="font-semibold">Payment successful!</span>
+                  </div>
+                  <p className="text-blue-700">
+                    Your AI verdict is being generated... This usually takes 30-60 seconds.
+                  </p>
+                  <p className="text-blue-600 text-sm mt-1">
+                    Page will auto-refresh, or click the refresh button below.
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                </Button>
               </div>
-              <p className="text-blue-700 mt-1">
-                Thank you for your purchase! Your AI verdict is being generated now...
-              </p>
             </CardContent>
           </Card>
         )}
@@ -414,6 +465,9 @@ export default function CaseDetailPage() {
                       <p className="text-xs text-purple-600 mt-1">
                         🇵🇭 Philippines-friendly • Instant delivery • 30-day money-back guarantee
                       </p>
+                      <p className="text-xs text-orange-600 mt-2 font-medium">
+                        💡 After payment, return to this page - your verdict will appear automatically!
+                      </p>
                     </div>
 
                     <Button onClick={handleUnlockVerdict} size="lg" disabled={paymentLoading} className="min-w-[200px]">
@@ -531,9 +585,28 @@ export default function CaseDetailPage() {
                       value={comment}
                       onChange={(e) => setComment(e.target.value)}
                       rows={3}
+                      maxLength={500}
                     />
-                    <Button size="sm" className="w-full">
-                      Post Comment
+                    <div className="flex justify-between items-center text-xs text-gray-500">
+                      <span>{comment.length}/500 characters</span>
+                    </div>
+                    <Button
+                      size="sm"
+                      className="w-full"
+                      onClick={handlePostComment}
+                      disabled={!comment.trim() || commentLoading}
+                    >
+                      {commentLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Posting...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="mr-2 h-4 w-4" />
+                          Post Comment
+                        </>
+                      )}
                     </Button>
                   </div>
                 </CardContent>

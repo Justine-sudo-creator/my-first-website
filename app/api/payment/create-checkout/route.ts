@@ -15,14 +15,25 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
     const gumroadProductId = process.env.GUMROAD_PRODUCT_ID
 
-    console.log("🔑 Gumroad product ID available:", !!gumroadProductId)
+    console.log("🔑 Gumroad product ID:", gumroadProductId ? `${gumroadProductId.substring(0, 8)}...` : "NOT SET")
     console.log("🌐 Base URL:", baseUrl)
+    console.log(
+      "🔍 All env vars starting with GUMROAD:",
+      Object.keys(process.env).filter((key) => key.startsWith("GUMROAD")),
+    )
 
     if (!gumroadProductId) {
       console.error("❌ GUMROAD_PRODUCT_ID environment variable is not set")
+      console.error("Available env vars:", Object.keys(process.env).sort())
+
       return NextResponse.json(
         {
-          error: "Payment system not configured. Please contact support.",
+          error: "GUMROAD_PRODUCT_ID not configured in environment variables",
+          debug: {
+            availableEnvVars: Object.keys(process.env).filter((key) => key.includes("GUMROAD")),
+            nodeEnv: process.env.NODE_ENV,
+            vercelEnv: process.env.VERCEL_ENV,
+          },
         },
         { status: 500 },
       )
@@ -53,6 +64,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: "Failed to create checkout session. Please try again.",
+        details: error.message,
       },
       { status: 500 },
     )
