@@ -23,6 +23,7 @@ import {
   AlertCircle,
   Globe,
   Shield,
+  ExternalLink,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useSearchParams } from "next/navigation"
@@ -32,7 +33,7 @@ export default function CaseDetailPage() {
   const searchParams = useSearchParams()
   const isNewCase = searchParams.get("new") === "true"
   const paymentSuccess = searchParams.get("payment") === "success"
-  const demoSuccess = searchParams.get("payment") === "demo-success"
+  const paymentSource = searchParams.get("source")
   const caseId = params.id as string
 
   const [hasVoted, setHasVoted] = useState(false)
@@ -66,19 +67,20 @@ export default function CaseDetailPage() {
     fetchCase()
   }, [caseId])
 
-  // Handle demo payment success
+  // Check if verdict was unlocked via payment
   useEffect(() => {
-    if (demoSuccess) {
-      // Simulate unlocking the verdict in demo mode
+    if (paymentSuccess && paymentSource === "gumroad") {
+      console.log("🎉 Payment successful from Gumroad, generating verdict...")
+
+      // Generate verdict immediately for better UX
       setTimeout(async () => {
         try {
-          // Generate a demo verdict
           const response = await fetch("/api/generate-verdict", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              caseTitle: caseData?.title || "Demo Case",
-              caseDescription: caseData?.description || "Demo description",
+              caseTitle: caseData?.title || "Paid Case",
+              caseDescription: caseData?.description || "Paid case description",
               tone: caseData?.tone || "satirical",
               votes: caseData?.votes || { plaintiff: 50, defendant: 30, split: 20 },
             }),
@@ -94,19 +96,11 @@ export default function CaseDetailPage() {
             }))
           }
         } catch (error) {
-          console.error("Failed to generate demo verdict:", error)
+          console.error("Failed to generate verdict:", error)
         }
       }, 1000)
     }
-  }, [demoSuccess, caseData])
-
-  // Check if verdict was unlocked via payment
-  useEffect(() => {
-    if (paymentSuccess) {
-      // Refresh case data to show unlocked verdict
-      setTimeout(fetchCase, 2000) // Give webhook time to process
-    }
-  }, [paymentSuccess])
+  }, [paymentSuccess, paymentSource, caseData])
 
   const handleVote = async (vote: "plaintiff" | "defendant" | "split") => {
     if (!hasVoted) {
@@ -150,19 +144,17 @@ export default function CaseDetailPage() {
       console.log("💳 Gumroad checkout response status:", response.status)
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("💥 Checkout error response:", errorText)
-        throw new Error(`HTTP ${response.status}: ${errorText}`)
+        const errorData = await response.json()
+        console.error("💥 Checkout error:", errorData)
+        throw new Error(errorData.error || `HTTP ${response.status}`)
       }
 
       const data = await response.json()
       console.log("✅ Checkout response data:", data)
 
-      if (data.mode === "demo") {
-        console.log("🎭 Demo mode - simulating payment success")
-        window.location.href = data.checkoutUrl
-      } else if (data.checkoutUrl) {
+      if (data.checkoutUrl) {
         console.log("🚀 Redirecting to Gumroad checkout:", data.checkoutUrl)
+        // Open in same window for better mobile experience
         window.location.href = data.checkoutUrl
       } else {
         throw new Error("No checkout URL received from server")
@@ -267,19 +259,15 @@ export default function CaseDetailPage() {
           </Card>
         )}
 
-        {(paymentSuccess || demoSuccess) && (
+        {paymentSuccess && paymentSource === "gumroad" && (
           <Card className="mb-6 border-blue-200 bg-blue-50">
             <CardContent className="pt-6">
               <div className="flex items-center gap-2 text-blue-800">
                 <Gavel className="h-5 w-5" />
-                <span className="font-semibold">
-                  {demoSuccess ? "Demo payment successful!" : "Payment successful!"}
-                </span>
+                <span className="font-semibold">Payment successful!</span>
               </div>
               <p className="text-blue-700 mt-1">
-                {demoSuccess
-                  ? "Your AI verdict is being generated in demo mode!"
-                  : "Your AI verdict is being generated. Refresh the page in a few moments to see it!"}
+                Thank you for your purchase! Your AI verdict is being generated now...
               </p>
             </CardContent>
           </Card>
@@ -418,38 +406,30 @@ export default function CaseDetailPage() {
                       <div className="flex items-center justify-center gap-2 mb-2">
                         <Shield className="h-4 w-4 text-purple-600" />
                         <Globe className="h-4 w-4 text-purple-600" />
-                        <span className="text-sm font-medium text-purple-800">Secure Global Payment</span>
+                        <span className="text-sm font-medium text-purple-800">Secure Payment via Gumroad</span>
                       </div>
                       <p className="text-xs text-purple-700">
-                        Powered by Gumroad • Credit Cards • PayPal • Apple Pay • Google Pay
+                        Credit Cards • PayPal • Apple Pay • Google Pay • Bank Transfer
                       </p>
                       <p className="text-xs text-purple-600 mt-1">
-                        🇵🇭 Philippines-friendly • Instant delivery • 30-day refund guarantee
+                        🇵🇭 Philippines-friendly • Instant delivery • 30-day money-back guarantee
                       </p>
-                      {!process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_ID && (
-                        <p className="text-xs text-orange-600 mt-2 font-medium">
-                          ⚠️ Demo mode: Gumroad not configured yet
-                        </p>
-                      )}
                     </div>
 
                     <Button onClick={handleUnlockVerdict} size="lg" disabled={paymentLoading} className="min-w-[200px]">
                       {paymentLoading ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Opening checkout...
+                          Opening Gumroad...
                         </>
                       ) : (
                         <>
-                          {process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_ID
-                            ? "Unlock Full Verdict - $3 USD"
-                            : "Try Demo Unlock"}
+                          Unlock Full Verdict - $3 USD
+                          <ExternalLink className="ml-2 h-4 w-4" />
                         </>
                       )}
                     </Button>
-                    <p className="text-xs text-gray-500 mt-2">
-                      {!process.env.GUMROAD_PRODUCT_ID && "Demo mode - no real payment required"}
-                    </p>
+                    <p className="text-xs text-gray-500 mt-2">Secure checkout powered by Gumroad</p>
                   </div>
                 )}
               </CardContent>

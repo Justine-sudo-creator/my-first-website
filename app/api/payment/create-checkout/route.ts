@@ -19,37 +19,42 @@ export async function POST(request: NextRequest) {
     console.log("🌐 Base URL:", baseUrl)
 
     if (!gumroadProductId) {
-      console.warn("[payment] Gumroad product ID missing – falling back to DEMO mode")
-
-      return NextResponse.json({
-        checkoutUrl: `${baseUrl}/case/${caseId}?payment=demo-success`,
-        sessionId: `demo_${Date.now()}`,
-        mode: "demo",
-      })
+      console.error("❌ GUMROAD_PRODUCT_ID environment variable is not set")
+      return NextResponse.json(
+        {
+          error: "Payment system not configured. Please contact support.",
+        },
+        { status: 500 },
+      )
     }
 
-    // Create Gumroad checkout URL
-    const checkoutUrl = `https://gumroad.com/l/${gumroadProductId}?wanted=true&case_id=${caseId}`
+    // Create Gumroad checkout URL with success redirect
+    const checkoutUrl = new URL(`https://gumroad.com/l/${gumroadProductId}`)
 
-    console.log("✅ Gumroad checkout URL created:", checkoutUrl)
+    // Add parameters for better UX
+    checkoutUrl.searchParams.set("wanted", "true") // Skip product page, go straight to checkout
+    checkoutUrl.searchParams.set("case_id", caseId.toString()) // Track which case this is for
+
+    // Set up redirect URL for after successful purchase
+    const successUrl = `${baseUrl}/case/${caseId}?payment=success&source=gumroad`
+    checkoutUrl.searchParams.set("redirect_url", successUrl)
+
+    console.log("✅ Gumroad checkout URL created:", checkoutUrl.toString())
 
     return NextResponse.json({
-      checkoutUrl: checkoutUrl,
-      sessionId: `gumroad_${Date.now()}`,
+      checkoutUrl: checkoutUrl.toString(),
+      sessionId: `gumroad_${caseId}_${Date.now()}`,
       mode: "gumroad",
+      productId: gumroadProductId,
     })
   } catch (error) {
-    console.error("💥 Error creating checkout session:", error)
+    console.error("💥 Error creating Gumroad checkout session:", error)
 
-    // Fallback to demo mode
-    const { caseId } = await request.json().catch(() => ({ caseId: null }))
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"
-
-    return NextResponse.json({
-      checkoutUrl: `${baseUrl}/case/${caseId}?payment=demo-success`,
-      sessionId: "demo_session_" + Date.now(),
-      mode: "demo",
-      error: "Gumroad unavailable - using demo mode",
-    })
+    return NextResponse.json(
+      {
+        error: "Failed to create checkout session. Please try again.",
+      },
+      { status: 500 },
+    )
   }
 }
