@@ -426,6 +426,11 @@ export default function CaseDetailPage() {
                       <p className="text-xs text-purple-600 mt-1">
                         🇵🇭 Philippines-friendly • Instant delivery • 30-day refund guarantee
                       </p>
+                      {!process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_ID && (
+                        <p className="text-xs text-orange-600 mt-2 font-medium">
+                          ⚠️ Demo mode: Gumroad not configured yet
+                        </p>
+                      )}
                     </div>
 
                     <Button onClick={handleUnlockVerdict} size="lg" disabled={paymentLoading} className="min-w-[200px]">
@@ -435,7 +440,11 @@ export default function CaseDetailPage() {
                           Opening checkout...
                         </>
                       ) : (
-                        "Unlock Full Verdict - $3 USD"
+                        <>
+                          {process.env.NEXT_PUBLIC_GUMROAD_PRODUCT_ID
+                            ? "Unlock Full Verdict - $3 USD"
+                            : "Try Demo Unlock"}
+                        </>
                       )}
                     </Button>
                     <p className="text-xs text-gray-500 mt-2">
