@@ -1,15 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-})
+let _stripe: Stripe | null = null
+function getStripe() {
+  if (_stripe) return _stripe
+  const secret = process.env.STRIPE_SECRET_KEY
+  if (!secret) throw new Error("STRIPE_SECRET_KEY is not set")
+  _stripe = new Stripe(secret, { apiVersion: "2024-06-20" })
+  return _stripe
+}
 
 export async function POST(request: NextRequest) {
   try {
     const { caseId } = await request.json()
 
-    const session = await stripe.checkout.sessions.create({
+    const session = await getStripe().checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
         {
