@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { getAllCases, createCase } from "@/lib/data"
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,42 +9,44 @@ export async function GET(request: NextRequest) {
     const sortBy = searchParams.get("sortBy") || "created_at"
     const search = searchParams.get("search")
 
-    let query = supabase
-      .from("cases")
-      .select("*")
-      .range(offset, offset + limit - 1)
+    let allCases = await getAllCases()
 
+    // Filter by search term
     if (search) {
-      query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`)
+      const searchLower = search.toLowerCase()
+      allCases = allCases.filter(
+        (case_) =>
+          case_.title.toLowerCase().includes(searchLower) || case_.description.toLowerCase().includes(searchLower),
+      )
     }
 
-    // Sort by total votes for trending
+    // Sort cases
     if (sortBy === "trending") {
-      query = query.order("plaintiff_votes", { ascending: false })
-    } else {
-      query = query.order(sortBy, { ascending: false })
+      allCases.sort((a, b) => {
+        const totalA = a.plaintiff_votes + a.defendant_votes + a.split_votes
+        const totalB = b.plaintiff_votes + b.defendant_votes + b.split_votes
+        return totalB - totalA
+      })
     }
 
-    const { data: cases, error } = await query
+    // Paginate
+    const paginatedCases = allCases.slice(offset, offset + limit)
 
-    if (error) throw error
-
-    // Format cases for frontend
-    const formattedCases =
-      cases?.map((case_) => ({
-        id: case_.id,
-        title: case_.title,
-        description: case_.description,
-        tone: case_.tone,
-        submittedAt: new Date(case_.created_at).toLocaleDateString(),
-        votes: {
-          plaintiff: case_.plaintiff_votes,
-          defendant: case_.defendant_votes,
-          split: case_.split_votes,
-        },
-        status: case_.verdict_unlocked ? "Verdict Ready" : "Jury Voting",
-        comments: 0, // TODO: Add comment count
-      })) || []
+    // Format for frontend
+    const formattedCases = paginatedCases.map((case_) => ({
+      id: case_.id,
+      title: case_.title,
+      description: case_.description,
+      tone: case_.tone,
+      submittedAt: new Date(case_.created_at).toLocaleDateString(),
+      votes: {
+        plaintiff: case_.plaintiff_votes,
+        defendant: case_.defendant_votes,
+        split: case_.split_votes,
+      },
+      status: case_.verdict_unlocked ? "Verdict Ready" : "Jury Voting",
+      comments: 0, // TODO: Add actual comment count
+    }))
 
     return NextResponse.json({ cases: formattedCases })
   } catch (error) {
@@ -57,49 +59,32 @@ export async function POST(request: NextRequest) {
   try {
     const { title, description, tone, evidenceUrls = [] } = await request.json()
 
+    // Basic validation
+    if (!title || !description || !tone) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
+
     // Content moderation - basic profanity filter
-    const profanityWords = ["fuck", "shit", "damn", "bitch", "asshole"] // Add more as needed
+    const profanityWords = ["fuck", "shit", "damn", "bitch", "asshole"]
     const contentToCheck = `${title} ${description}`.toLowerCase()
 
     const hasProfanity = profanityWords.some((word) => contentToCheck.includes(word))
     if (hasProfanity) {
       return NextResponse.json(
-        {
-          error: "Content contains inappropriate language. Please revise and resubmit.",
-        },
+        { error: "Content contains inappropriate language. Please revise and resubmit." },
         { status: 400 },
       )
     }
 
-    // Rate limiting check (simple IP-based)
     const clientIP = request.headers.get("x-forwarded-for") || "unknown"
 
-    const { data: recentCases } = await supabase
-      .from("cases")
-      .select("created_at")
-      .eq("ip_address", clientIP)
-      .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-
-    if (recentCases && recentCases.length >= 3) {
-      return NextResponse.json({ error: "Rate limit exceeded. Maximum 3 cases per day." }, { status: 429 })
-    }
-
-    const { data: newCase, error } = await supabase
-      .from("cases")
-      .insert({
-        title,
-        description,
-        tone,
-        evidence_urls: evidenceUrls,
-        plaintiff_votes: 0,
-        defendant_votes: 0,
-        split_votes: 0,
-        ip_address: clientIP,
-      })
-      .select()
-      .single()
-
-    if (error) throw error
+    const newCase = await createCase({
+      title,
+      description,
+      tone,
+      evidence_urls: evidenceUrls,
+      ip_address: clientIP,
+    })
 
     return NextResponse.json({ case: newCase })
   } catch (error) {

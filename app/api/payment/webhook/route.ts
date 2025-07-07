@@ -1,75 +1,66 @@
 import { headers } from "next/headers"
 import { type NextRequest, NextResponse } from "next/server"
-import Stripe from "stripe"
-import { supabase } from "@/lib/supabase"
-
-let _stripe: Stripe | null = null
-function getStripe() {
-  if (_stripe) return _stripe
-  const secret = process.env.STRIPE_SECRET_KEY
-  if (!secret) throw new Error("STRIPE_SECRET_KEY is not set")
-  _stripe = new Stripe(secret, { apiVersion: "2024-06-20" })
-  return _stripe
-}
-
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
+import { getCaseById, updateCaseVerdict } from "@/lib/data"
 
 export async function POST(request: NextRequest) {
-  const body = await request.text()
-  const headersList = headers()
-  const sig = headersList.get("stripe-signature")!
-
-  let event: Stripe.Event
-
   try {
-    event = getStripe().webhooks.constructEvent(body, sig, endpointSecret)
-  } catch (err) {
-    console.error("Webhook signature verification failed:", err)
-    return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
-  }
+    const body = await request.text()
+    const headersList = headers()
 
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object as Stripe.Checkout.Session
-    const caseId = session.metadata?.caseId
+    console.log("🎣 Gumroad webhook received")
 
-    if (caseId) {
-      // Generate and store the AI verdict
-      try {
-        const { data: caseData } = await supabase.from("cases").select("*").eq("id", caseId).single()
+    // Parse the webhook data
+    const webhookData = JSON.parse(body)
+    console.log("📨 Webhook data:", webhookData)
 
-        if (caseData) {
-          // Generate verdict using AI
-          const verdictResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/generate-verdict`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              caseTitle: caseData.title,
-              caseDescription: caseData.description,
-              tone: caseData.tone,
-              votes: {
-                plaintiff: caseData.plaintiff_votes,
-                defendant: caseData.defendant_votes,
-                split: caseData.split_votes,
-              },
-            }),
-          })
+    // Gumroad sends different event types
+    if (webhookData.sale_id && webhookData.product_id) {
+      const caseId = webhookData.custom_fields?.case_id || webhookData.case_id
 
-          const { verdict } = await verdictResponse.json()
+      console.log("💰 Gumroad sale completed for case:", caseId)
+      console.log("🛒 Sale ID:", webhookData.sale_id)
+      console.log("📦 Product ID:", webhookData.product_id)
 
-          // Update case with verdict
-          await supabase
-            .from("cases")
-            .update({
-              verdict_unlocked: true,
-              verdict_text: verdict,
+      if (caseId) {
+        try {
+          const caseData = getCaseById(Number.parseInt(caseId))
+
+          if (caseData) {
+            console.log("🤖 Generating AI verdict...")
+
+            // Generate verdict using AI
+            const verdictResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/generate-verdict`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                caseTitle: caseData.title,
+                caseDescription: caseData.description,
+                tone: caseData.tone,
+                votes: {
+                  plaintiff: caseData.plaintiff_votes,
+                  defendant: caseData.defendant_votes,
+                  split: caseData.split_votes,
+                },
+              }),
             })
-            .eq("id", caseId)
+
+            if (verdictResponse.ok) {
+              const { verdict } = await verdictResponse.json()
+              updateCaseVerdict(Number.parseInt(caseId), verdict)
+              console.log("✅ Verdict generated and saved")
+            } else {
+              console.error("❌ Failed to generate verdict")
+            }
+          }
+        } catch (error) {
+          console.error("💥 Error processing Gumroad payment:", error)
         }
-      } catch (error) {
-        console.error("Error processing payment:", error)
       }
     }
-  }
 
-  return NextResponse.json({ received: true })
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    console.error("💥 Gumroad webhook processing error:", error)
+    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 })
+  }
 }

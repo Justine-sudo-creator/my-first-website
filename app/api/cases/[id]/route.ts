@@ -1,24 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { getCaseById, getCommentsForCase } from "@/lib/data"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const caseId = Number.parseInt(params.id)
 
-    const { data: caseData, error } = await supabase.from("cases").select("*").eq("id", caseId).single()
-
-    if (error) throw error
-
+    const caseData = getCaseById(caseId)
     if (!caseData) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 })
     }
 
-    // Get comments for this case
-    const { data: comments } = await supabase
-      .from("comments")
-      .select("*")
-      .eq("case_id", caseId)
-      .order("created_at", { ascending: false })
+    const comments = getCommentsForCase(caseId)
 
     // Format the response to match frontend expectations
     const formattedCase = {
@@ -32,21 +24,19 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         defendant: caseData.defendant_votes,
         split: caseData.split_votes,
       },
-      comments:
-        comments?.map((comment) => ({
-          id: comment.id,
-          vote: comment.vote_type,
-          text: comment.content,
-          likes: comment.likes,
-          timestamp: new Date(comment.created_at).toLocaleDateString(),
-        })) || [],
-      evidence:
-        caseData.evidence_urls?.map((url: string, index: number) => ({
-          type: "image",
-          name: `evidence_${index + 1}.jpg`,
-          description: "Uploaded evidence",
-          url,
-        })) || [],
+      comments: comments.map((comment) => ({
+        id: comment.id,
+        vote: comment.vote_type,
+        text: comment.content,
+        likes: comment.likes,
+        timestamp: new Date(comment.created_at).toLocaleDateString(),
+      })),
+      evidence: (caseData.evidence_urls || []).map((url: string, index: number) => ({
+        type: "image",
+        name: `evidence_${index + 1}.jpg`,
+        description: "Uploaded evidence",
+        url,
+      })),
       verdict_unlocked: caseData.verdict_unlocked,
       verdict_text: caseData.verdict_text,
     }

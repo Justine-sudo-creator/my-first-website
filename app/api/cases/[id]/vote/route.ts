@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { addVote, hasUserVoted } from "@/lib/data"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -8,25 +8,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const clientIP = request.headers.get("x-forwarded-for") || "unknown"
 
     // Check if user has already voted
-    const { data: existingVote } = await supabase
-      .from("votes")
-      .select("id")
-      .eq("case_id", caseId)
-      .eq("ip_address", clientIP)
-      .single()
-
-    if (existingVote) {
+    if (hasUserVoted(caseId, clientIP)) {
       return NextResponse.json({ error: "You have already voted on this case" }, { status: 400 })
     }
 
-    // Insert the vote
-    const { error } = await supabase.from("votes").insert({
-      case_id: caseId,
-      vote_type: vote,
-      ip_address: clientIP,
-    })
+    // Add the vote
+    const success = await addVote(caseId, vote, clientIP)
 
-    if (error) throw error
+    if (!success) {
+      return NextResponse.json({ error: "Failed to record vote" }, { status: 400 })
+    }
 
     return NextResponse.json({
       success: true,

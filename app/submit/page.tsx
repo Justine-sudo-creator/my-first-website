@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Gavel, Upload, ArrowLeft, Send, X } from "lucide-react"
+import { Gavel, Upload, ArrowLeft, Send, X, DollarSign, Globe } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -230,14 +230,22 @@ export default function SubmitCasePage() {
               </div>
 
               {/* Pricing Info */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-blue-900 mb-2">What happens next?</h3>
-                <ul className="text-sm text-blue-800 space-y-1">
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <Globe className="h-5 w-5 text-purple-600" />
+                  <h3 className="font-semibold text-purple-900">What happens next?</h3>
+                </div>
+                <ul className="text-sm text-purple-800 space-y-1">
                   <li>• Your case goes live immediately for jury voting</li>
                   <li>• Free preview of your AI verdict after 24 hours</li>
-                  <li>• Unlock full verdict + shareable ruling for $3</li>
+                  <li>• Unlock full verdict + shareable ruling for $3 USD</li>
+                  <li>• Secure payment via Gumroad (Philippines-friendly)</li>
                   <li>• Cases with 100+ votes get priority AI attention</li>
                 </ul>
+                <div className="mt-3 p-2 bg-purple-100 rounded text-xs text-purple-700">
+                  <DollarSign className="h-3 w-3 inline mr-1" />
+                  Payment processed securely by Gumroad • Credit cards, PayPal, Apple Pay accepted
+                </div>
               </div>
 
               {/* Submit Button */}

@@ -8,7 +8,22 @@ import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
-import { Gavel, Users, MessageCircle, Share2, ArrowLeft, Lock, Crown, ThumbsUp, ThumbsDown, Meh } from "lucide-react"
+import {
+  Gavel,
+  Users,
+  MessageCircle,
+  Share2,
+  ArrowLeft,
+  Lock,
+  Crown,
+  ThumbsUp,
+  ThumbsDown,
+  Meh,
+  Loader2,
+  AlertCircle,
+  Globe,
+  Shield,
+} from "lucide-react"
 import Link from "next/link"
 import { useParams, useSearchParams } from "next/navigation"
 
@@ -17,6 +32,7 @@ export default function CaseDetailPage() {
   const searchParams = useSearchParams()
   const isNewCase = searchParams.get("new") === "true"
   const paymentSuccess = searchParams.get("payment") === "success"
+  const demoSuccess = searchParams.get("payment") === "demo-success"
   const caseId = params.id as string
 
   const [hasVoted, setHasVoted] = useState(false)
@@ -24,14 +40,23 @@ export default function CaseDetailPage() {
   const [comment, setComment] = useState("")
   const [caseData, setCaseData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [paymentLoading, setPaymentLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchCase = async () => {
     try {
+      setError(null)
       const response = await fetch(`/api/cases/${caseId}`)
       const data = await response.json()
-      setCaseData(data.case)
+
+      if (response.ok) {
+        setCaseData(data.case)
+      } else {
+        setError(data.error || "Failed to load case")
+      }
     } catch (error) {
       console.error("Failed to fetch case:", error)
+      setError("Failed to load case")
     } finally {
       setLoading(false)
     }
@@ -40,6 +65,40 @@ export default function CaseDetailPage() {
   useEffect(() => {
     fetchCase()
   }, [caseId])
+
+  // Handle demo payment success
+  useEffect(() => {
+    if (demoSuccess) {
+      // Simulate unlocking the verdict in demo mode
+      setTimeout(async () => {
+        try {
+          // Generate a demo verdict
+          const response = await fetch("/api/generate-verdict", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              caseTitle: caseData?.title || "Demo Case",
+              caseDescription: caseData?.description || "Demo description",
+              tone: caseData?.tone || "satirical",
+              votes: caseData?.votes || { plaintiff: 50, defendant: 30, split: 20 },
+            }),
+          })
+
+          if (response.ok) {
+            const { verdict } = await response.json()
+            // Update the case data locally to show the verdict
+            setCaseData((prev: any) => ({
+              ...prev,
+              verdict_unlocked: true,
+              verdict_text: verdict,
+            }))
+          }
+        } catch (error) {
+          console.error("Failed to generate demo verdict:", error)
+        }
+      }, 1000)
+    }
+  }, [demoSuccess, caseData])
 
   // Check if verdict was unlocked via payment
   useEffect(() => {
@@ -74,20 +133,45 @@ export default function CaseDetailPage() {
   }
 
   const handleUnlockVerdict = async () => {
+    setPaymentLoading(true)
+    setError(null)
+
     try {
+      console.log("🔓 Starting Gumroad payment flow for case:", caseId)
+
       const response = await fetch("/api/payment/create-checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caseId }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ caseId: Number.parseInt(caseId) }),
       })
 
+      console.log("💳 Gumroad checkout response status:", response.status)
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("💥 Checkout error response:", errorText)
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
+      }
+
       const data = await response.json()
-      if (data.checkoutUrl) {
+      console.log("✅ Checkout response data:", data)
+
+      if (data.mode === "demo") {
+        console.log("🎭 Demo mode - simulating payment success")
         window.location.href = data.checkoutUrl
+      } else if (data.checkoutUrl) {
+        console.log("🚀 Redirecting to Gumroad checkout:", data.checkoutUrl)
+        window.location.href = data.checkoutUrl
+      } else {
+        throw new Error("No checkout URL received from server")
       }
     } catch (error) {
-      console.error("Failed to create checkout:", error)
-      alert("Failed to create payment session")
+      console.error("❌ Payment flow error:", error)
+      setError(`Payment failed: ${error.message}`)
+    } finally {
+      setPaymentLoading(false)
     }
   }
 
@@ -123,12 +207,13 @@ export default function CaseDetailPage() {
     )
   }
 
-  if (!caseData) {
+  if (error || !caseData) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Case Not Found</h1>
-          <p className="text-gray-600 mb-4">This case doesn't exist or has been removed.</p>
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">{error || "Case Not Found"}</h1>
+          <p className="text-gray-600 mb-4">{error || "This case doesn't exist or has been removed."}</p>
           <Button asChild>
             <Link href="/cases">Browse Other Cases</Link>
           </Button>
@@ -182,16 +267,33 @@ export default function CaseDetailPage() {
           </Card>
         )}
 
-        {paymentSuccess && (
+        {(paymentSuccess || demoSuccess) && (
           <Card className="mb-6 border-blue-200 bg-blue-50">
             <CardContent className="pt-6">
               <div className="flex items-center gap-2 text-blue-800">
                 <Gavel className="h-5 w-5" />
-                <span className="font-semibold">Payment successful!</span>
+                <span className="font-semibold">
+                  {demoSuccess ? "Demo payment successful!" : "Payment successful!"}
+                </span>
               </div>
               <p className="text-blue-700 mt-1">
-                Your AI verdict is being generated. Refresh the page in a few moments to see it!
+                {demoSuccess
+                  ? "Your AI verdict is being generated in demo mode!"
+                  : "Your AI verdict is being generated. Refresh the page in a few moments to see it!"}
               </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Error Alert */}
+        {error && (
+          <Card className="mb-6 border-red-200 bg-red-50">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 text-red-800">
+                <AlertCircle className="h-5 w-5" />
+                <span className="font-semibold">Error</span>
+              </div>
+              <p className="text-red-700 mt-1">{error}</p>
             </CardContent>
           </Card>
         )}
@@ -310,9 +412,35 @@ export default function CaseDetailPage() {
                         internet drama, this court finds..."
                       </p>
                     </div>
-                    <Button onClick={handleUnlockVerdict} size="lg">
-                      Unlock Full Verdict - $3
+
+                    {/* Gumroad Payment Info */}
+                    <div className="bg-purple-50 p-4 rounded-lg mb-4">
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <Shield className="h-4 w-4 text-purple-600" />
+                        <Globe className="h-4 w-4 text-purple-600" />
+                        <span className="text-sm font-medium text-purple-800">Secure Global Payment</span>
+                      </div>
+                      <p className="text-xs text-purple-700">
+                        Powered by Gumroad • Credit Cards • PayPal • Apple Pay • Google Pay
+                      </p>
+                      <p className="text-xs text-purple-600 mt-1">
+                        🇵🇭 Philippines-friendly • Instant delivery • 30-day refund guarantee
+                      </p>
+                    </div>
+
+                    <Button onClick={handleUnlockVerdict} size="lg" disabled={paymentLoading} className="min-w-[200px]">
+                      {paymentLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Opening checkout...
+                        </>
+                      ) : (
+                        "Unlock Full Verdict - $3 USD"
+                      )}
                     </Button>
+                    <p className="text-xs text-gray-500 mt-2">
+                      {!process.env.GUMROAD_PRODUCT_ID && "Demo mode - no real payment required"}
+                    </p>
                   </div>
                 )}
               </CardContent>

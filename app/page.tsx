@@ -16,6 +16,10 @@ export default function HomePage() {
     async function fetchCases() {
       try {
         const response = await fetch("/api/cases?limit=3&sortBy=trending")
+        if (!response.ok) {
+          const text = await response.text()
+          throw new Error(text || "Failed to fetch")
+        }
         const data = await response.json()
         setFeaturedCases(data.cases || [])
       } catch (error) {

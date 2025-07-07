@@ -28,6 +28,10 @@ export default function CasesPage() {
         })
 
         const response = await fetch(`/api/cases?${params}`)
+        if (!response.ok) {
+          const text = await response.text()
+          throw new Error(text || "Failed to fetch")
+        }
         const data = await response.json()
         setCases(data.cases || [])
       } catch (error) {
