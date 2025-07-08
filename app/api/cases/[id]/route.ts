@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getCaseById, getCommentsForCase } from "@/lib/data"
+import { getCaseById, getVerdictByCaseId, getCommentsForCase, getOrCreateUser } from "@/lib/data"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const caseId = Number.parseInt(params.id)
 
@@ -10,40 +10,63 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Case not found" }, { status: 404 })
     }
 
+    const verdict = getVerdictByCaseId(caseId)
     const comments = getCommentsForCase(caseId)
 
-    // Format the response to match frontend expectations
+    // Get judge info if verdict exists
+    let judgeInfo = null
+    if (verdict) {
+      const judge = getOrCreateUser(verdict.judge_id)
+      judgeInfo = {
+        username: judge.username,
+        avatar: judge.avatar,
+        title: judge.title,
+        rating: judge.judge_rating,
+      }
+    }
+
     const formattedCase = {
       id: caseData.id,
       title: caseData.title,
       description: caseData.description,
       tone: caseData.tone,
+      theme: caseData.theme,
       submittedAt: new Date(caseData.created_at).toLocaleDateString(),
       votes: {
         plaintiff: caseData.plaintiff_votes,
         defendant: caseData.defendant_votes,
         split: caseData.split_votes,
       },
-      comments: comments.map((comment) => ({
-        id: comment.id,
-        vote: comment.vote_type,
-        text: comment.content,
-        likes: comment.likes,
-        timestamp: new Date(comment.created_at).toLocaleDateString(),
+      status: caseData.status,
+      comments: comments.map((c) => ({
+        id: c.id,
+        vote: c.vote_type,
+        text: c.content,
+        likes: c.likes,
+        timestamp: new Date(c.created_at).toLocaleDateString(),
       })),
-      evidence: (caseData.evidence_urls || []).map((url: string, index: number) => ({
-        type: "image",
-        name: `evidence_${index + 1}.jpg`,
-        description: "Uploaded evidence",
-        url,
-      })),
-      verdict_unlocked: caseData.verdict_unlocked,
-      verdict_text: caseData.verdict_text,
+      evidence: Array.isArray(caseData.evidence_urls)
+        ? caseData.evidence_urls.map((url, i) => ({
+            type: "image",
+            name: `evidence_${i + 1}`,
+            description: "Uploaded evidence",
+            url,
+          }))
+        : [],
+      verdict: verdict
+        ? {
+            text: verdict.verdict_text,
+            judge: judgeInfo,
+            likes: verdict.likes,
+            tips_received: verdict.tips_received,
+            created_at: verdict.created_at,
+          }
+        : null,
     }
 
     return NextResponse.json({ case: formattedCase })
-  } catch (error) {
-    console.error("Error fetching case:", error)
+  } catch (err) {
+    console.error("Error fetching case:", err)
     return NextResponse.json({ error: "Failed to fetch case" }, { status: 500 })
   }
 }

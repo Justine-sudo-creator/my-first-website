@@ -14,18 +14,14 @@ import {
   MessageCircle,
   Share2,
   ArrowLeft,
-  Lock,
   Crown,
   ThumbsUp,
   ThumbsDown,
   Meh,
   Loader2,
   AlertCircle,
-  Globe,
-  Shield,
-  ExternalLink,
   Send,
-  RefreshCw,
+  Clock,
 } from "lucide-react"
 import Link from "next/link"
 import { useParams, useSearchParams } from "next/navigation"
@@ -34,8 +30,6 @@ export default function CaseDetailPage() {
   const params = useParams()
   const searchParams = useSearchParams()
   const isNewCase = searchParams.get("new") === "true"
-  const paymentSuccess = searchParams.get("payment") === "success"
-  const paymentSource = searchParams.get("source")
   const caseId = params.id as string
 
   const [hasVoted, setHasVoted] = useState(false)
@@ -43,11 +37,9 @@ export default function CaseDetailPage() {
   const [comment, setComment] = useState("")
   const [caseData, setCaseData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [paymentLoading, setPaymentLoading] = useState(false)
   const [commentLoading, setCommentLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showPaymentInstructions, setShowPaymentInstructions] = useState(false)
 
   const fetchCase = async () => {
     try {
@@ -72,36 +64,6 @@ export default function CaseDetailPage() {
   useEffect(() => {
     fetchCase()
   }, [caseId])
-
-  // Auto-refresh when payment is successful
-  useEffect(() => {
-    if (paymentSuccess && paymentSource === "gumroad") {
-      console.log("🎉 Payment successful from Gumroad")
-      setShowPaymentInstructions(true)
-
-      // Auto-refresh every 3 seconds to check for verdict
-      const interval = setInterval(() => {
-        console.log("🔄 Auto-refreshing to check for verdict...")
-        fetchCase()
-      }, 3000)
-
-      // Stop auto-refresh after 2 minutes
-      setTimeout(() => {
-        clearInterval(interval)
-        console.log("⏰ Stopped auto-refresh after 2 minutes")
-      }, 120000)
-
-      return () => clearInterval(interval)
-    }
-  }, [paymentSuccess, paymentSource])
-
-  // Stop auto-refresh when verdict is unlocked
-  useEffect(() => {
-    if (caseData?.verdict_unlocked && showPaymentInstructions) {
-      setShowPaymentInstructions(false)
-      console.log("✅ Verdict unlocked! Stopping auto-refresh.")
-    }
-  }, [caseData?.verdict_unlocked, showPaymentInstructions])
 
   const handleVote = async (vote: "plaintiff" | "defendant" | "split") => {
     if (!hasVoted) {
@@ -166,47 +128,6 @@ export default function CaseDetailPage() {
     await fetchCase()
   }
 
-  const handleUnlockVerdict = async () => {
-    setPaymentLoading(true)
-    setError(null)
-
-    try {
-      console.log("🔓 Starting Gumroad payment flow for case:", caseId)
-
-      const response = await fetch("/api/payment/create-checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ caseId: Number.parseInt(caseId) }),
-      })
-
-      console.log("💳 Gumroad checkout response status:", response.status)
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("💥 Checkout error:", errorData)
-        throw new Error(errorData.error || `HTTP ${response.status}`)
-      }
-
-      const data = await response.json()
-      console.log("✅ Checkout response data:", data)
-
-      if (data.checkoutUrl) {
-        console.log("🚀 Redirecting to Gumroad checkout:", data.checkoutUrl)
-        // Open in same window for better mobile experience
-        window.location.href = data.checkoutUrl
-      } else {
-        throw new Error("No checkout URL received from server")
-      }
-    } catch (error) {
-      console.error("❌ Payment flow error:", error)
-      setError(`Payment failed: ${error.message}`)
-    } finally {
-      setPaymentLoading(false)
-    }
-  }
-
   const handleShare = async () => {
     const shareData = {
       title: `${caseData.title} - PettyCourt`,
@@ -259,6 +180,10 @@ export default function CaseDetailPage() {
   const defendantPercentage = totalVotes > 0 ? Math.round((caseData.votes.defendant / totalVotes) * 100) : 0
   const splitPercentage = totalVotes > 0 ? Math.round((caseData.votes.split / totalVotes) * 100) : 0
 
+  const getTotalVotes = (votes: any) => {
+    return votes.plaintiff + votes.defendant + votes.split
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       {/* Header */}
@@ -295,31 +220,6 @@ export default function CaseDetailPage() {
               <p className="text-green-700 mt-1">
                 Your case is now live. Share the link to get more votes and a better AI verdict!
               </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Payment Success Instructions */}
-        {showPaymentInstructions && (
-          <Card className="mb-6 border-blue-200 bg-blue-50">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-blue-800 mb-2">
-                    <Gavel className="h-5 w-5" />
-                    <span className="font-semibold">Payment successful!</span>
-                  </div>
-                  <p className="text-blue-700">
-                    Your AI verdict is being generated... This usually takes 30-60 seconds.
-                  </p>
-                  <p className="text-blue-600 text-sm mt-1">
-                    Page will auto-refresh, or click the refresh button below.
-                  </p>
-                </div>
-                <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                </Button>
-              </div>
             </CardContent>
           </Card>
         )}
@@ -418,72 +318,77 @@ export default function CaseDetailPage() {
               </CardContent>
             </Card>
 
-            {/* AI Verdict */}
+            {/* Verdict Section */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Gavel className="h-5 w-5" />
-                  Official AI Verdict
+                  Official Verdict
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {caseData.verdict_unlocked && caseData.verdict_text ? (
-                  <div className="bg-gray-50 p-6 rounded-lg">
-                    <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed">{caseData.verdict_text}</pre>
-                    <div className="mt-4 pt-4 border-t">
-                      <Button className="mr-2" onClick={handleShare}>
+                {caseData.verdict ? (
+                  <div className="space-y-4">
+                    <div className="bg-gray-50 p-6 rounded-lg">
+                      <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed">
+                        {caseData.verdict.text}
+                      </pre>
+                    </div>
+
+                    {/* Judge Attribution */}
+                    <div className="flex items-center justify-between pt-4 border-t">
+                      <div className="flex items-center gap-3">
+                        <div className="text-2xl">{caseData.verdict.judge.avatar}</div>
+                        <div>
+                          <div className="font-semibold">Judged by {caseData.verdict.judge.username}</div>
+                          <div className="text-sm text-gray-500">{caseData.verdict.judge.title}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm">
+                          <ThumbsUp className="mr-2 h-4 w-4" />
+                          {caseData.verdict.likes}
+                        </Button>
+                        <Button variant="outline" size="sm">
+                          💰 Tip Judge
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button onClick={handleShare}>
                         <Share2 className="mr-2 h-4 w-4" />
                         Share Verdict
                       </Button>
                       <Button variant="outline">Download PDF</Button>
                     </div>
                   </div>
+                ) : caseData.status === "awaiting_verdict" ? (
+                  <div className="text-center py-8">
+                    <Clock className="h-12 w-12 text-blue-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">Verdict Coming Soon!</h3>
+                    <p className="text-gray-600 mb-4">
+                      This case has reached {getTotalVotes(caseData.votes)} votes and is now awaiting judgment from our
+                      verified judges.
+                    </p>
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <p className="text-sm text-blue-800">
+                        <strong>Estimated time:</strong> 24-48 hours for a human-written verdict
+                      </p>
+                    </div>
+                  </div>
                 ) : (
                   <div className="text-center py-8">
-                    <Lock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">Verdict Ready!</h3>
+                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">Still Collecting Votes</h3>
                     <p className="text-gray-600 mb-4">
-                      Your AI-generated legal ruling is ready. Unlock it to see the full dramatic verdict.
+                      This case needs {10 - getTotalVotes(caseData.votes)} more votes before it can be judged.
                     </p>
-                    <div className="bg-blue-50 p-4 rounded-lg mb-4">
-                      <p className="text-sm text-blue-800">
-                        <strong>Preview:</strong> "After careful deliberation and consuming an unhealthy amount of
-                        internet drama, this court finds..."
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <p className="text-sm text-gray-600">
+                        Share this case to get more votes and unlock the verdict faster!
                       </p>
                     </div>
-
-                    {/* Gumroad Payment Info */}
-                    <div className="bg-purple-50 p-4 rounded-lg mb-4">
-                      <div className="flex items-center justify-center gap-2 mb-2">
-                        <Shield className="h-4 w-4 text-purple-600" />
-                        <Globe className="h-4 w-4 text-purple-600" />
-                        <span className="text-sm font-medium text-purple-800">Secure Payment via Gumroad</span>
-                      </div>
-                      <p className="text-xs text-purple-700">
-                        Credit Cards • PayPal • Apple Pay • Google Pay • Bank Transfer
-                      </p>
-                      <p className="text-xs text-purple-600 mt-1">
-                        🇵🇭 Philippines-friendly • Instant delivery • 30-day money-back guarantee
-                      </p>
-                      <p className="text-xs text-orange-600 mt-2 font-medium">
-                        💡 After payment, return to this page - your verdict will appear automatically!
-                      </p>
-                    </div>
-
-                    <Button onClick={handleUnlockVerdict} size="lg" disabled={paymentLoading} className="min-w-[200px]">
-                      {paymentLoading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Opening Gumroad...
-                        </>
-                      ) : (
-                        <>
-                          Unlock Full Verdict - $3 USD
-                          <ExternalLink className="ml-2 h-4 w-4" />
-                        </>
-                      )}
-                    </Button>
-                    <p className="text-xs text-gray-500 mt-2">Secure checkout powered by Gumroad</p>
                   </div>
                 )}
               </CardContent>
@@ -633,8 +538,20 @@ export default function CaseDetailPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Verdict Status</span>
-                  <Badge variant={caseData.verdict_unlocked ? "default" : "secondary"}>
-                    {caseData.verdict_unlocked ? "Unlocked" : "Locked"}
+                  <Badge
+                    variant={
+                      caseData.status === "decided"
+                        ? "default"
+                        : caseData.status === "awaiting_verdict"
+                          ? "secondary"
+                          : "outline"
+                    }
+                  >
+                    {caseData.status === "decided"
+                      ? "Complete"
+                      : caseData.status === "awaiting_verdict"
+                        ? "Pending"
+                        : "Voting"}
                   </Badge>
                 </div>
               </CardContent>

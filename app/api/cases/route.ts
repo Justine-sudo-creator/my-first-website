@@ -1,15 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getAllCases, createCase } from "@/lib/data"
+import { getAllCases, createCase, getVerdictByCaseId, getOrCreateUser } from "@/lib/data"
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const limit = Number.parseInt(searchParams.get("limit") || "20")
     const offset = Number.parseInt(searchParams.get("offset") || "0")
-    const sortBy = searchParams.get("sortBy") || "created_at"
+    const sortBy = searchParams.get("sortBy") || "recent"
     const search = searchParams.get("search")
+    const status = searchParams.get("status")
 
-    let allCases = await getAllCases()
+    let allCases = await getAllCases({ sortBy, status: status || undefined })
 
     // Filter by search term
     if (search) {
@@ -20,33 +21,49 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Sort cases
-    if (sortBy === "trending") {
-      allCases.sort((a, b) => {
-        const totalA = a.plaintiff_votes + a.defendant_votes + a.split_votes
-        const totalB = b.plaintiff_votes + b.defendant_votes + b.split_votes
-        return totalB - totalA
-      })
-    }
-
     // Paginate
     const paginatedCases = allCases.slice(offset, offset + limit)
 
-    // Format for frontend
-    const formattedCases = paginatedCases.map((case_) => ({
-      id: case_.id,
-      title: case_.title,
-      description: case_.description,
-      tone: case_.tone,
-      submittedAt: new Date(case_.created_at).toLocaleDateString(),
-      votes: {
-        plaintiff: case_.plaintiff_votes,
-        defendant: case_.defendant_votes,
-        split: case_.split_votes,
-      },
-      status: case_.verdict_unlocked ? "Verdict Ready" : "Jury Voting",
-      comments: 0, // TODO: Add actual comment count
-    }))
+    // Format for frontend with verdict info
+    const formattedCases = paginatedCases.map((case_) => {
+      const verdict = getVerdictByCaseId(case_.id)
+      let judgeInfo = null
+      let verdictPreview = null
+
+      if (verdict) {
+        const judge = getOrCreateUser(verdict.judge_id)
+        judgeInfo = {
+          username: judge.username,
+          avatar: judge.avatar,
+        }
+        // Get first 2-3 lines for preview
+        const lines = verdict.verdict_text.split("\n").filter((line) => line.trim())
+        verdictPreview = lines.slice(0, 3).join("\n") + (lines.length > 3 ? "..." : "")
+      }
+
+      return {
+        id: case_.id,
+        title: case_.title,
+        description: case_.description,
+        tone: case_.tone,
+        theme: case_.theme,
+        submittedAt: new Date(case_.created_at).toLocaleDateString(),
+        votes: {
+          plaintiff: case_.plaintiff_votes,
+          defendant: case_.defendant_votes,
+          split: case_.split_votes,
+        },
+        status: case_.status,
+        verdict: verdict
+          ? {
+              preview: verdictPreview,
+              judge: judgeInfo,
+              likes: verdict.likes,
+            }
+          : null,
+        comments: 0, // TODO: Add actual comment count if needed
+      }
+    })
 
     return NextResponse.json({ cases: formattedCases })
   } catch (error) {
@@ -57,23 +74,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { title, description, tone, evidenceUrls = [] } = await request.json()
+    const { title, description, tone, evidenceUrls = [], theme } = await request.json()
 
     // Basic validation
     if (!title || !description || !tone) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-    }
-
-    // Content moderation - basic profanity filter
-    const profanityWords = ["fuck", "shit", "damn", "bitch", "asshole"]
-    const contentToCheck = `${title} ${description}`.toLowerCase()
-
-    const hasProfanity = profanityWords.some((word) => contentToCheck.includes(word))
-    if (hasProfanity) {
-      return NextResponse.json(
-        { error: "Content contains inappropriate language. Please revise and resubmit." },
-        { status: 400 },
-      )
     }
 
     const clientIP = request.headers.get("x-forwarded-for") || "unknown"
@@ -82,8 +87,10 @@ export async function POST(request: NextRequest) {
       title,
       description,
       tone,
+      theme,
       evidence_urls: evidenceUrls,
-      ip_address: clientIP,
+      submitter_id: clientIP,
+      is_featured: false,
     })
 
     return NextResponse.json({ case: newCase })
